@@ -2,7 +2,7 @@ import express from 'express';
 import httpProxy from 'http-proxy';
 import { downloadAndUnzipBlob, listAppVersions } from './blobStoreHelpers';
 import { SUPPORTED_APP_VARIANTS, VariantType } from './constants';
-import { CHILD_SERVERS, getProxyUrl } from './spawnChild';
+import { getCleanedProxyRequestUrl, getProxyTarget } from './spawnChild';
 
 const app = express();
 const proxy = httpProxy.createProxyServer({});
@@ -66,20 +66,20 @@ const handleSampleAppRequest = async (req: express.Request, res: express.Respons
     return;
   }
 
-  console.log('Child servers:', CHILD_SERVERS);
-
-  let proxyUrl = '';
+  let proxyTargetUrl: string | undefined;
   try {
-    proxyUrl = await getProxyUrl(version, variant as VariantType, req.url);
+    proxyTargetUrl = await getProxyTarget(version, variant as VariantType, req.url);
   } catch (e) {
     console.error(e);
     res.status(503).send('Server encountered an error processing the request');
     return;
   }
 
+  const proxyRequestUrl = getCleanedProxyRequestUrl(version, variant as VariantType, req.url);
   // Proxy the request to the appropriate child server
-  console.log('Proxying request to:', proxyUrl);
-  proxy.web(req, res, { target: proxyUrl }, (err) => {
+  console.log('Proxy Target:', proxyTargetUrl, 'Proxy RequestUrl:', proxyRequestUrl);
+  req.url = proxyRequestUrl;
+  proxy.web(req, res, { target: proxyTargetUrl }, (err) => {
     if (err) {
       console.error(err);
       res.status(502).send('Bad Gateway');

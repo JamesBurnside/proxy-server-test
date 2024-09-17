@@ -26,7 +26,7 @@ export async function listAppVersions(): Promise<string[]> {
 
 // Download Blob using Managed Identity (DefaultAzureCredential)
 export async function downloadAndUnzipBlob(version: string, variant: VariantType): Promise<void> {
-  console.log(`downloadBlob::${version}/${variant}.zip`);
+  console.log(`Downloading ${version}/${variant}.zip`);
 
   const blobPath = `${version}/${variant}.zip`;
 

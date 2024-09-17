@@ -13,10 +13,22 @@ const serverKey = (version: string, variant: VariantType): string => `${version}
 // Track last used port number
 let portNumber = 3000;
 
-export const getProxyUrl = async (version: string, variant: VariantType, restOfUrl?: string): Promise<string> => {
+export const getProxyTarget = async (version: string, variant: VariantType, restOfUrl?: string): Promise<string> => {
   await upsertChildServer(version, variant);
   const port = CHILD_SERVERS[serverKey(version, variant)];
-  return `http://localhost:${port}${restOfUrl}`;
+  return `http://localhost:${port}`;
+}
+
+export const getCleanedProxyRequestUrl = (version: string, variant: VariantType, restOfUrl?: string): string => {
+  const port = CHILD_SERVERS[serverKey(version, variant)];
+  const url = new URL(`http://localhost:${port}${restOfUrl}`);
+
+  // Clean URL for the proxy server
+  url.searchParams.delete('version');
+  url.searchParams.delete('variant');
+  url.pathname = url.pathname.replace(`/version`, '');
+
+  return url.toString();
 }
 
 const childExists = (version: string, variant: VariantType): boolean => {
@@ -26,12 +38,16 @@ const childExists = (version: string, variant: VariantType): boolean => {
 const upsertChildServer = async (version: string, variant: VariantType): Promise<void> => {
   if (!childExists(version, variant)) {
     await spawnChildServer(version, variant);
+  } else {
+    console.log(`Child server ${version}/${variant} exists`);
   }
 }
 
 const upsertVersionVariantDownload = async (version: string, variant: VariantType): Promise<void> => {
   if (!fs.existsSync(getVariantFolder(version, variant))) {
     await downloadAndUnzipBlob(version, variant);
+  } else {
+    console.log(`Version ${version} variant ${variant} download exists`);
   }
 }
 
@@ -41,7 +57,8 @@ const spawnChildServer = async (version: string, variant: VariantType): Promise<
 
   await upsertVersionVariantDownload(version, variant);
 
-  const scriptPath = path.join(getVariantFolder(version, variant), `server.js`);
+  const variantFolder = getVariantFolder(version, variant);
+  const scriptFilePath = path.join(variantFolder, `server.js`);
 
   const newPortNumber = portNumber + 1;
   portNumber = newPortNumber;
@@ -49,7 +66,9 @@ const spawnChildServer = async (version: string, variant: VariantType): Promise<
   process.env['port'] = `${newPortNumber}`;
 
   const spawnPromise = new Promise<void>((resolve, reject) => {
-    const child = fork(scriptPath);
+    const child = fork(scriptFilePath, [], {
+      cwd: path.dirname(variantFolder)
+    });
     child.on('spawn', () => {
       // wait 500ms for server to start
       setTimeout(() => {
