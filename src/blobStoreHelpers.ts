@@ -4,9 +4,8 @@ import fs from "fs";
 import path from "path";
 import AdmZip from "adm-zip";
 import { APP_SETTINGS } from "./environment";
-import { DOWNLOADED_APP_BUILDS_FOLDER_NAME } from "./constants";
-
-type AppType = 'chat' | 'calling' | 'callwithchat;'
+import { VariantType } from "./constants";
+import { getVariantFolder, getVersionFolder } from "./pathUtils";
 
 // Variables for your storage account
 const storageAccountName = APP_SETTINGS.AzureBlobStorageAccountName
@@ -26,10 +25,10 @@ export async function listAppVersions(): Promise<string[]> {
 }
 
 // Download Blob using Managed Identity (DefaultAzureCredential)
-export async function downloadBlob(version: string, appType: AppType): Promise<void> {
-  console.log(`downloadBlob::${version}/${appType}.zip`);
+export async function downloadAndUnzipBlob(version: string, variant: VariantType): Promise<void> {
+  console.log(`downloadBlob::${version}/${variant}.zip`);
 
-  const blobPath = `${version}/${appType}.zip`;
+  const blobPath = `${version}/${variant}.zip`;
 
   // check if the blob exists
   const blobClient = getContainerClient().getBlobClient(blobPath);
@@ -42,19 +41,19 @@ export async function downloadBlob(version: string, appType: AppType): Promise<v
   const downloadResponse = await blobClient.download();
 
   // create a folder to store the downloaded content if it doesn't exist
-  const downloadFileFolder = path.join(__dirname, DOWNLOADED_APP_BUILDS_FOLDER_NAME, version);
+  const downloadFileFolder = getVersionFolder(version);
   if (!fs.existsSync(downloadFileFolder)) {
     fs.mkdirSync(downloadFileFolder);
   }
-  const downloadFilePath = path.join(downloadFileFolder, `${appType}.zip`);
+  const downloadedZipFilePath = path.join(downloadFileFolder, `${variant}.zip`);
 
   // Save the downloaded content to a local file
   const downloadedData = await streamToBuffer(downloadResponse.readableStreamBody);
-  fs.writeFileSync(downloadFilePath, downloadedData);
-  console.log(`Blob downloaded to ${downloadFilePath}`);
+  fs.writeFileSync(downloadedZipFilePath, downloadedData);
+  console.log(`Blob downloaded to ${downloadedZipFilePath}`);
 
   // Unzip the downloaded blob
-  unzipFile(downloadFilePath);
+  unzipFile(downloadedZipFilePath, downloadFileFolder);
 }
 
 const getContainerClient = (): ContainerClient => {
@@ -87,10 +86,9 @@ async function streamToBuffer(readableStream: NodeJS.ReadableStream | null): Pro
 }
 
 // Unzip the downloaded file
-function unzipFile(zipFilePath: string): void {
+function unzipFile(zipFilePath: string, extractTo: string): void {
   const zip = new AdmZip(zipFilePath);
-  const extractPath: string = ".";
 
   // Extract the zip contents
-  zip.extractAllTo(extractPath, true);
+  zip.extractAllTo(extractTo, true);
 }

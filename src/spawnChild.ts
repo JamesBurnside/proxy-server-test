@@ -1,36 +1,47 @@
-import { DOWNLOADED_APP_BUILDS_FOLDER_NAME } from "./constants";
+import { VariantType } from "./constants";
 import path from 'path';
+import fs from 'fs';
 import { fork } from 'child_process';
+import { downloadAndUnzipBlob } from "./blobStoreHelpers";
+import { getVariantFolder } from "./pathUtils";
 
 // Record childServers that have been spawned, `version-variant:portNumber`
 export const CHILD_SERVERS: Record<string, number> = {}
 
-const serverKey = (version: string, variant: string): string => `${version}-${variant}`;
+const serverKey = (version: string, variant: VariantType): string => `${version}-${variant}`;
 
 // Track last used port number
 let portNumber = 3000;
 
-export const getProxyUrl = async (version: string, variant: string, restOfUrl?: string): Promise<string> => {
+export const getProxyUrl = async (version: string, variant: VariantType, restOfUrl?: string): Promise<string> => {
   await upsertChildServer(version, variant);
   const port = CHILD_SERVERS[serverKey(version, variant)];
   return `http://localhost:${port}${restOfUrl}`;
 }
 
-const childExists = (version: string, variant: string): boolean => {
+const childExists = (version: string, variant: VariantType): boolean => {
   return !!CHILD_SERVERS[serverKey(version, variant)];
 }
 
-const upsertChildServer = async (version: string, variant: string): Promise<void> => {
+const upsertChildServer = async (version: string, variant: VariantType): Promise<void> => {
   if (!childExists(version, variant)) {
     await spawnChildServer(version, variant);
   }
 }
 
+const upsertVersionVariantDownload = async (version: string, variant: VariantType): Promise<void> => {
+  if (!fs.existsSync(getVariantFolder(version, variant))) {
+    await downloadAndUnzipBlob(version, variant);
+  }
+}
+
 // Function to spawn child servers
-const spawnChildServer = async (version: string, variant: string): Promise<void> => {
+const spawnChildServer = async (version: string, variant: VariantType): Promise<void> => {
   console.log(`Spawning child server ${version}/${variant}`);
 
-  const scriptPath = path.join(__dirname, DOWNLOADED_APP_BUILDS_FOLDER_NAME, version, variant, `server.js`);
+  await upsertVersionVariantDownload(version, variant);
+
+  const scriptPath = path.join(getVariantFolder(version, variant), `server.js`);
 
   const newPortNumber = portNumber + 1;
   portNumber = newPortNumber;
@@ -59,5 +70,5 @@ const spawnChildServer = async (version: string, variant: string): Promise<void>
   console.log(`Child server ${version}/${variant} spawned on port ${newPortNumber}`);
 
   // record version and port number that is active
-  CHILD_SERVERS[`${version}-${variant}`] = newPortNumber;
+  CHILD_SERVERS[serverKey(version, variant)] = newPortNumber;
 };
