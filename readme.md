@@ -13,6 +13,7 @@ This is a simple proxy server that forwards requests to child servers. It spawns
 
 1. Clone the repository
 2. Run `npm install`
+3. Set values in the appsettings.json
 
 ### Running the server
 

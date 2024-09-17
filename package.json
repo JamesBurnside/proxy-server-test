@@ -2,20 +2,27 @@
   "name": "proxy-server-test",
   "version": "1.0.0",
   "description": "",
-  "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc && copyfiles --all -u 1 test-versions/**/* dist/versions",
+    "start": "npm run build && node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/adm-zip": "^0.5.5",
     "@types/http-proxy": "^1.17.15",
+    "copyfiles": "^2.4.1",
+    "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.2"
   },
   "dependencies": {
+    "@azure/identity": "^4.4.1",
+    "@azure/storage-blob": "^12.24.0",
+    "adm-zip": "^0.5.16",
     "http-proxy": "^1.18.1"
   }
 }
