@@ -1,28 +1,25 @@
-import http from 'http';
+import express from 'express';
 import httpProxy from 'http-proxy';
 import { downloadBlob } from './downloadBlob';
 import { SUPPORTED_APP_VARIANTS } from './constants';
 import { CHILD_SERVERS, getProxyUrl } from './spawnChild';
 
-// Create a proxy server
+const app = express();
 const proxy = httpProxy.createProxyServer({});
 
-const server = http.createServer(async (req, res) => {
+app.get('/favicon.ico', (req, res) => {
+  res.status(404).send('Not Found');
+});
+
+app.get('/testDownloadBlob', async (req, res) => {
+  await downloadBlob('latest', 'calling');
+  res.status(200).send('Test completed');
+});
+
+app.use(async (req, res) => {
   console.log('Request received:', req.url);
   if (!req.url) {
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
-    res.end('Bad Request: Invalid URL');
-    return;
-  }
-  if (req.url === '/favicon.ico') {
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Not Found');
-    return;
-  }
-  if (req.url === '/testDownloadBlob') {
-    await downloadBlob('latest', 'calling');
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Test completed');
+    res.status(400).send('Bad Request: Invalid URL');
     return;
   }
 
@@ -36,15 +33,13 @@ const server = http.createServer(async (req, res) => {
 
   if (!version) {
     console.error('Bad Request: Invalid or missing version');
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
-    res.end('Bad Request: Invalid or missing version');
+    res.status(400).send('Bad Request: Invalid or missing version');
     return;
   }
 
   if (!variant || !(SUPPORTED_APP_VARIANTS.includes(variant))) {
     console.error('Bad Request: Invalid or missing variant');
-    res.writeHead(400, { 'Content-Type': 'text/plain' });
-    res.end('Bad Request: Invalid or missing variant');
+    res.status(400).send('Bad Request: Invalid or missing variant');
     return;
   }
 
@@ -55,8 +50,7 @@ const server = http.createServer(async (req, res) => {
     proxyUrl = await getProxyUrl(version!, variant!, req.url);
   } catch (e) {
     console.error(e);
-    res.writeHead(503, { 'Content-Type': 'text/plain' });
-    res.end('Server encountered an error processing the request');
+    res.status(503).send('Server encountered an error processing the request');
     return;
   }
 
@@ -65,12 +59,11 @@ const server = http.createServer(async (req, res) => {
   proxy.web(req, res, { target: proxyUrl }, (err) => {
     if (err) {
       console.error(err);
-      res.writeHead(502, { 'Content-Type': 'text/plain' });
-      res.end('Bad Gateway');
+      res.status(502).send('Bad Gateway');
     }
   });
- });
+});
 
-server.listen(3000, () => {
+app.listen(3000, () => {
   console.log('Parent server listening on port 3000');
 });

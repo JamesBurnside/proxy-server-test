@@ -23,6 +23,7 @@
     "@azure/identity": "^4.4.1",
     "@azure/storage-blob": "^12.24.0",
     "adm-zip": "^0.5.16",
+    "express": "^4.21.0",
     "http-proxy": "^1.18.1"
   }
 }
