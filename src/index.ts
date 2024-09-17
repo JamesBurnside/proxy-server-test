@@ -1,56 +1,11 @@
 import http from 'http';
 import httpProxy from 'http-proxy';
-import { fork } from 'child_process';
-import path from 'path';
 import { downloadBlob } from './downloadBlob';
-import { DOWNLOADED_APP_BUILDS_FOLDER_NAME, SUPPORTED_APP_VARIANTS } from './constants';
+import { SUPPORTED_APP_VARIANTS } from './constants';
+import { CHILD_SERVERS, getProxyUrl } from './spawnChild';
 
 // Create a proxy server
 const proxy = httpProxy.createProxyServer({});
-
-// Record childServers that have been spawned, `version-variant:portNumber`
-const childServers: Record<string, number> = {}
-
-// Track last used port number
-let portNumber = 3000;
-
-// Supported SKUs of sample apps
-
-// Function to spawn child servers
-const spawnChildServer = async (version: string, variant: string): Promise<void> => {
-  console.log(`Spawning child server ${version}/${variant}`);
-
-  const scriptPath = path.join(__dirname, DOWNLOADED_APP_BUILDS_FOLDER_NAME, version, variant, `server.js`);
-
-  const newPortNumber = portNumber + 1;
-  portNumber = newPortNumber;
-
-  process.env['port'] = `${newPortNumber}`;
-
-  const spawnPromise = new Promise<void>((resolve, reject) => {
-    const child = fork(scriptPath);
-    child.on('spawn', () => {
-      // wait 500ms for server to start
-      setTimeout(() => {
-        resolve();
-      }, 500);
-    });
-    child.on('error', (err) => {
-      reject(err);
-    });
-    child.on('exit', (code, signal) => {
-      console.log(`Child server ${version}/${variant} exited with code ${code} and signal ${signal}`);
-      reject(new Error(`Child server ${version}/${variant} exited with code ${code} and signal ${signal}`));
-    });
-  });
-
-  await spawnPromise;
-
-  console.log(`Child server ${version}/${variant} spawned on port ${newPortNumber}`);
-
-  // record version and port number that is active
-  childServers[`${version}-${variant}`] = newPortNumber;
-};
 
 const server = http.createServer(async (req, res) => {
   console.log('Request received:', req.url);
@@ -93,25 +48,21 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  console.log('Child servers:', childServers);
+  console.log('Child servers:', CHILD_SERVERS);
 
-  if (!childServers[`${version}-${variant}`]) {
-     try {
-       await spawnChildServer(version!, variant!);
-     } catch (e) {
-       console.error(e);
-       res.writeHead(503, { 'Content-Type': 'text/plain' });
-       res.end('Server encountered an error processing the request');
-       return;
-     }
-  } else {
-    console.log(`Child server ${version}/${variant} found`);
+  let proxyUrl = '';
+  try {
+    proxyUrl = await getProxyUrl(version!, variant!, req.url);
+  } catch (e) {
+    console.error(e);
+    res.writeHead(503, { 'Content-Type': 'text/plain' });
+    res.end('Server encountered an error processing the request');
+    return;
   }
 
   // Proxy the request to the appropriate child server
-  const childServerTarget = `http://localhost:${childServers[`${version}-${variant}`]}${req.url}`;
-  console.log('Proxying request to:', childServerTarget);
-  proxy.web(req, res, { target: childServerTarget }, (err) => {
+  console.log('Proxying request to:', proxyUrl);
+  proxy.web(req, res, { target: proxyUrl }, (err) => {
     if (err) {
       console.error(err);
       res.writeHead(502, { 'Content-Type': 'text/plain' });
@@ -123,6 +74,3 @@ const server = http.createServer(async (req, res) => {
 server.listen(3000, () => {
   console.log('Parent server listening on port 3000');
 });
-
-// Spawn a child server for testing a defaultly spawned server
-spawnChildServer('1.0.0', 'call');
