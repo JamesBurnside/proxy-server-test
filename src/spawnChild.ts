@@ -4,11 +4,11 @@ import { fork } from 'child_process';
 
 // Record childServers that have been spawned, `version-variant:portNumber`
 export const CHILD_SERVERS: Record<string, number> = {}
+
 const serverKey = (version: string, variant: string): string => `${version}-${variant}`;
 
 // Track last used port number
 let portNumber = 3000;
-
 
 export const getProxyUrl = async (version: string, variant: string, restOfUrl?: string): Promise<string> => {
   await upsertChildServer(version, variant);
@@ -16,9 +16,12 @@ export const getProxyUrl = async (version: string, variant: string, restOfUrl?: 
   return `http://localhost:${port}${restOfUrl}`;
 }
 
+const childExists = (version: string, variant: string): boolean => {
+  return !!CHILD_SERVERS[serverKey(version, variant)];
+}
+
 const upsertChildServer = async (version: string, variant: string): Promise<void> => {
-  const key = serverKey(version, variant);
-  if (!CHILD_SERVERS[key]) {
+  if (!childExists(version, variant)) {
     await spawnChildServer(version, variant);
   }
 }

@@ -1,5 +1,5 @@
 import { DefaultAzureCredential } from "@azure/identity";
-import { BlobServiceClient } from "@azure/storage-blob";
+import { BlobServiceClient, ContainerClient } from "@azure/storage-blob";
 import fs from "fs";
 import path from "path";
 import AdmZip from "adm-zip";
@@ -12,20 +12,31 @@ type AppType = 'chat' | 'calling' | 'callwithchat;'
 const storageAccountName = APP_SETTINGS.AzureBlobStorageAccountName
 const containerName = APP_SETTINGS.AzureBlobContainerName;
 
+export async function listAppVersions(): Promise<string[]> {
+  const containerClient = getContainerClient();
+  const blobItems = containerClient.listBlobsFlat();
+  const versions: string[] = [];
+  for await (const blob of blobItems) {
+    const version = blob.name.split('/')[0];
+    if (!versions.includes(version)) {
+      versions.push(version);
+    }
+  }
+  return versions;
+}
+
 // Download Blob using Managed Identity (DefaultAzureCredential)
 export async function downloadBlob(version: string, appType: AppType): Promise<void> {
   console.log(`downloadBlob::${version}/${appType}.zip`);
-  // Create BlobServiceClient using the managed identity
-  const credential = new DefaultAzureCredential();
-  const blobServiceClient = new BlobServiceClient(
-    `https://${storageAccountName}.blob.core.windows.net`,
-    credential
-  );
+
   const blobPath = `${version}/${appType}.zip`;
 
-  // Get container and blob client
-  const containerClient = blobServiceClient.getContainerClient(containerName);
-  const blobClient = containerClient.getBlobClient(blobPath);
+  // check if the blob exists
+  const blobClient = getContainerClient().getBlobClient(blobPath);
+  const blobExists = await blobClient.exists();
+  if (!blobExists) {
+    throw new Error(`Blob ${blobPath} does not exist`);
+  }
 
   // Download blob content
   const downloadResponse = await blobClient.download();
@@ -44,6 +55,17 @@ export async function downloadBlob(version: string, appType: AppType): Promise<v
 
   // Unzip the downloaded blob
   unzipFile(downloadFilePath);
+}
+
+const getContainerClient = (): ContainerClient => {
+  // Create BlobServiceClient using the managed identity
+  const credential = new DefaultAzureCredential();
+  const blobServiceClient = new BlobServiceClient(
+    `https://${storageAccountName}.blob.core.windows.net`,
+    credential
+  );
+
+  return blobServiceClient.getContainerClient(containerName);
 }
 
 // Helper function to convert a readable stream to buffer

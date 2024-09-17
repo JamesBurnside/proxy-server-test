@@ -1,6 +1,6 @@
 import express from 'express';
 import httpProxy from 'http-proxy';
-import { downloadBlob } from './downloadBlob';
+import { downloadBlob, listAppVersions } from './blobStoreHelpers';
 import { SUPPORTED_APP_VARIANTS } from './constants';
 import { CHILD_SERVERS, getProxyUrl } from './spawnChild';
 
@@ -16,6 +16,16 @@ app.get('/testDownloadBlob', async (req, res) => {
   res.status(200).send('Test completed');
 });
 
+app.get('/listVersions', async (req, res) => {
+  try {
+    const versions = await listAppVersions();
+    res.status(200).send(versions);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
 app.use(async (req, res) => {
   try {
     await handleSampleAppRequest(req, res);
@@ -27,18 +37,13 @@ app.use(async (req, res) => {
 
 const handleSampleAppRequest = async (req: express.Request, res: express.Response) => {
   console.log('Request received:', req.url);
-  if (!req.url) {
-    res.status(400).send('Bad Request: Invalid URL');
-    return;
-  }
 
   // Get the version from the query parameter
   const url = new URL(`http://${process.env.HOST ?? 'localhost'}${req.url}`);
-  const version = url.searchParams.get('version');
-  const variant = url.searchParams.get('variant');
+  const version = url.searchParams.get('version') ?? 'latest';
+  const variant = url.searchParams.get('variant') ?? 'call';
 
-  console.log('Version:', version);
-  console.log('Variant:', variant);
+  console.log('Version:', version, 'Variant:', variant);
 
   if (!version) {
     console.error('Bad Request: Invalid or missing version');
