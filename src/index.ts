@@ -17,6 +17,15 @@ app.get('/testDownloadBlob', async (req, res) => {
 });
 
 app.use(async (req, res) => {
+  try {
+    await handleSampleAppRequest(req, res);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+const handleSampleAppRequest = async (req: express.Request, res: express.Response) => {
   console.log('Request received:', req.url);
   if (!req.url) {
     res.status(400).send('Bad Request: Invalid URL');
@@ -62,7 +71,7 @@ app.use(async (req, res) => {
       res.status(502).send('Bad Gateway');
     }
   });
-});
+}
 
 app.listen(3000, () => {
   console.log('Parent server listening on port 3000');
